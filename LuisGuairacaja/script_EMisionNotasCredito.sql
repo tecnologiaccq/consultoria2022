@@ -1,5 +1,7 @@
 USE [CCQ_DESA]
 
+
+
 /* 
 Se agrega un nuevo campo [IdCargoCab] a la tabla de Descargo.
 Permitirá un cruce más rápido de los detalles
@@ -14,6 +16,8 @@ ALTER TABLE tCC_DescargosCab ADD NumeroDocumento  AS (concat([Establecimiento],'
 
 GO
 DROP TRIGGER [tCC_DescargosCabAIIdCobrador]
+GO
+DROP TRIGGER [tCC_DescargosCabInsertTemporalCruce]
 GO
 
 GO
@@ -342,8 +346,13 @@ UPDATE tGN_Secuenciales
 SET    Secuencial = [dbo].[fn_LeftPAD](CONVERT(VARCHAR, @SecuencialInt + 1), 9, '0')  
 WHERE  IdPuntoEmision = @IdPuntoEmision  AND IdTipoDocumento = @IdTipoDocumento; 
 
-	-- si todo salió bien se ejecuta el commit    
-	--COMMIT TRANSACTION CC_Registrar_NotaCredito;     
+
+-- --------------------------------------------
+-- Se ejecuta el proceso de mayorización
+-- --------------------------------------------
+
+
+
 END TRY  
  BEGIN CATCH  
   SELECT @MENSAJE_ERROR = ERROR_MESSAGE(),  
