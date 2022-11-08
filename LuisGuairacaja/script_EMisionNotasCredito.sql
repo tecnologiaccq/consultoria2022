@@ -1,7 +1,5 @@
 USE [CCQ_DESA]
 
-
-
 /* 
 Se agrega un nuevo campo [IdCargoCab] a la tabla de Descargo.
 Permitirá un cruce más rápido de los detalles
@@ -117,7 +115,20 @@ AS
 --DECLARE @ArregloIdCargoCab ArregloIdCargoCab
 --DECLARE @Motivo  VARCHAR(300) = 'ANULACIÓN TOTAL DE LA FACTURA 001-019-000126808'
 --INSERT INTO @ArregloIdCargoCab values(291511);
+--INSERT INTO @ArregloIdCargoCab values(291523);
 
+-- ------------------------------
+-- Validación de Errores
+DECLARE @resultadosValidacion VARCHAR(2000)  
+
+--Tratamiento de errores  
+ --====================================  
+ DECLARE @MENSAJE_ERROR NVARCHAR(4000)  
+ DECLARE @NUMERO_ERROR INT  
+ DECLARE @ERROR_SEVERITY INT  
+ DECLARE @ERROR_STATE INT  
+ --====================================  
+ 
 --En esta variable se retorna el id del Asiento generado o en caso del error el texto de mismo  
 DECLARE @IdAsientoContableCab VARCHAR(2000) = NULL 
 DECLARE @IdEmpresa INT = 0
@@ -136,32 +147,54 @@ DECLARE @IdGrupoComprobante INT = 0
 DECLARE @NumeroComprobanteActual INT = 0
 DECLARE @IdDescargoCabInserted INT = 0
 
+--Tabla temporal para los IdCargos que llegan en el arreglo
+DECLARE @maxContador INT = 0
+DECLARE @codigo INT = 0
+DECLARE @IdCargoCabCurrent INT = 0
 
-SELECT @IdEmpresa = cargo.IdEmpresa , @IdTipoDocumentoCCQ = cargo.IdTipoDocumentoCCQ
+DECLARE @tblCargos TABLE (
+id INT IDENTITY(1, 1) NOT NULL PRIMARY KEY
+,IdCargoCab INT NOT NULL
+);
+
+BEGIN TRY  
+  BEGIN TRANSACTION CC_Registrar_NotaCredito;  
+
+	INSERT INTO @tblCargos
+	select * from @ArregloIdCargoCab
+	SELECT @maxContador = @@ROWCOUNT
+	IF (@maxContador > 0)
+	BEGIN
+	SELECT @codigo = 1;
+	WHILE (@codigo <= @maxContador)
+	BEGIN
+	-- -----------
+	-- ======================================================
+	SELECT @IdCargoCabCurrent = IdCargoCab FROM @tblCargos WHERE id = @codigo;
+
+	SELECT @IdEmpresa = cargo.IdEmpresa , @IdTipoDocumentoCCQ = cargo.IdTipoDocumentoCCQ
 FROM tCC_CargosCab cargo
 INNER JOIN @ArregloIdCargoCab arrIds on cargo.IdCargoCab = arrIds.IdCargoCab;
-
-select @IdTipoDocumento = IdTipoDocumento FROM tGN_TiposDocumentos WHERE CodigoDocumentoSRI = '04' AND IdEmpresa = @IdEmpresa
-SELECT @IdCaja = Valor FROM tGN_ParametrosGenerales WHERE Codigo = 'ID_CAJA_NOTACREDITO' and IdEmpresa = @IdEmpresa
-SELECT @IdPuntoEmision = IdPuntoEmision FROM tCC_Caja WHERE IdCaja = @IdCaja
-SELECT @IdTipoCobro = IdTipoCobro FROM tCC_TiposCobros WHERE IdEmpresa = @IdEmpresa and Codigo = 'CAJ'
-SELECT @Establecimiento = Establecimiento FROM tGN_Establecimientos estab WHERE estab.IdEmpresa = @IdEmpresa
-SELECT @PuntoEmision = PuntoEmision FROM tGN_PuntosEmision WHERE IdPuntoEmision = @IdPuntoEmision
-select @IdPeriodoContable = IdPeriodoContable FROM tCG_PeriodoContable WHERE IdEstadoPeriodoContable = 1 and IdEmpresa = @IdEmpresa
-select @IdGrupoComprobante = IdGrupoComprobante from tCG_GrupoComprobantes WHERE IdEmpresa = @IdEmpresa and Codigo = 'DIA'
-select @IdEstadoDocumento = IdEstadoDocumento from tCT_EstadoDocumentoSRI WHERE Codigo = 'CARGA'
-
--- Get el secuencial disponible para la NC
-SELECT @SecuencialInt = Secuencial  
+	SELECT @IdTipoDocumento = IdTipoDocumento FROM tGN_TiposDocumentos WHERE CodigoDocumentoSRI = '04' AND IdEmpresa = @IdEmpresa
+	SELECT @IdCaja = Valor FROM tGN_ParametrosGenerales WHERE Codigo = 'ID_CAJA_NOTACREDITO' and IdEmpresa = @IdEmpresa
+	SELECT @IdPuntoEmision = IdPuntoEmision FROM tCC_Caja WHERE IdCaja = @IdCaja
+	SELECT @IdTipoCobro = IdTipoCobro FROM tCC_TiposCobros WHERE IdEmpresa = @IdEmpresa and Codigo = 'CAJ'
+	SELECT @Establecimiento = Establecimiento FROM tGN_Establecimientos estab WHERE estab.IdEmpresa = @IdEmpresa
+	SELECT @PuntoEmision = PuntoEmision FROM tGN_PuntosEmision WHERE IdPuntoEmision = @IdPuntoEmision
+	SELECT @IdPeriodoContable = IdPeriodoContable FROM tCG_PeriodoContable WHERE IdEstadoPeriodoContable = 1 and IdEmpresa = @IdEmpresa
+	SELECT @IdGrupoComprobante = IdGrupoComprobante from tCG_GrupoComprobantes WHERE IdEmpresa = @IdEmpresa and Codigo = 'DIA'
+	SELECT @IdEstadoDocumento = IdEstadoDocumento from tCT_EstadoDocumentoSRI WHERE Codigo = 'CARGA'
+	
+	-- Get el secuencial disponible para la NC
+	SELECT @SecuencialInt = Secuencial  
 FROM   tGN_Secuenciales WITH (XLOCK, TABLOCK)  
 WHERE  IdPuntoEmision = @IdPuntoEmision  
 AND IdTipoDocumento = @IdTipoDocumento;      
-
-SET @Secuencial = [dbo].[fn_LeftPAD](CONVERT(VARCHAR, @SecuencialInt), 9, '0');  
-
--- get el NumeroComprobante Actual
-SELECT @NumeroComprobanteActual = dbo.ObtenerNumeroComprobanteActual(  @IdEmpresa, @IdPeriodoContable, @IdGrupoComprobante)
-
+	SET @Secuencial = [dbo].[fn_LeftPAD](CONVERT(VARCHAR, @SecuencialInt), 9, '0');  
+	
+	-- get el NumeroComprobante Actual
+	SELECT @NumeroComprobanteActual = dbo.ObtenerNumeroComprobanteActual(  @IdEmpresa, @IdPeriodoContable, @IdGrupoComprobante)
+	/*
 PRINT '@@IdEmpresa: ' + convert(varchar,@IdEmpresa)
 PRINT '@IdTipoDocumento: ' + convert(varchar,@IdTipoDocumento)
 PRINT '@@IdTipoDocumentoCCQ: ' + convert(varchar,@IdTipoDocumentoCCQ)
@@ -173,101 +206,86 @@ PRINT '@PuntoEmision: ' + convert(varchar,@PuntoEmision)
 PRINT '@IdPeriodoContable: ' + convert(varchar,@IdPeriodoContable)
 PRINT '@Secuencial: ' + @Secuencial
 PRINT '@NumeroComprobanteActual: ' + CONVERT(VARCHAR, @NumeroComprobanteActual)
-
--- ------------------------------
--- Validación de Errores
-DECLARE @resultadosValidacion VARCHAR(2000)  
-
---Tratamiento de errores  
- --====================================  
- DECLARE @MENSAJE_ERROR NVARCHAR(4000)  
- DECLARE @NUMERO_ERROR INT  
- DECLARE @ERROR_SEVERITY INT  
- DECLARE @ERROR_STATE INT  
- --====================================  
- 
-
-BEGIN TRY  
-  BEGIN TRANSACTION CC_Registrar_NotaCredito;  
+*/
 
 --[1]  Insert de la Cabecera del descargo
 
-INSERT INTO tCC_DescargosCab (
-IdCliente
-,IdTipoDocumento
-,IdEmpresa
-,IdPeriodoContable
-,Establecimiento
-,PuntoEmision
-,Secuencial
-,FechaEmision
-,SubtotalIva
-,Subtotal0
-,SubtotalNoObjetoImpuesto
-,TotalExcentoIva
-,SubtotalSinImpuesto
-,TotalDescuento
-,Iva
-,Ice
-,Irbpnr
-,ValorTotal
-,Saldo
-,Motivo
-,InformacionAdicional
-,IdEstadoDocumento
-,IdGrupoComprobante
-,NumeroComprobante
-,Concepto
-,IdTipoCobro
-,IdCaja
-,EnviarAlDoce
-,IdTipoDocumentoModificado
-,NumeroDocumentoModificado
-,FechaEmisionDocSustento
-,IdCobrador
-,IdCargoCab
-)
-select 
-cargo.IdCliente
-,@IdTipoDocumento as IdTipoDocumento
-,cargo.IdEmpresa as IdEmpresa 
-,@IdPeriodoContable as IdPeriodoContable
-,@Establecimiento as Establecimiento
-,@PuntoEmision as PuntoEmision
-,@Secuencial AS Secuencial
-,GETDATE() as FechaEmision
-,cargo.SubtotalIva
-,cargo.Subtotal0
-,cargo.SubtotalNoObjetoImpuesto
-,cargo.TotalExcentoIva
-,cargo.SubtotalSinImpuesto
-,cargo.TotalDescuento
-,cargo.Iva
-,cargo.Ice
-,cargo.Irbpnr
-,cargo.ValorTotal
-,cargo.Saldo
-,@Motivo
-,cargo.InformacionAdicional
-,@IdEstadoDocumento as IdEstadoDocumento
-,@IdGrupoComprobante as IdGrupoComprobante
-,@NumeroComprobanteActual as NumeroComprobante
-,@Motivo
-,@IdTipoCobro 
-,@IdCaja
-,cargo.EnviarAlDoce
-,cargo.IdTipoDocumento as IdTipoDocumentoModificado
-,cargo.NumeroDocumento as NumeroDocumentoModificado
-,cargo.FechaEmision as FechaEmisionDocSustento
-,cargo.IdCobrador
-,cargo.IdCargoCab
-from tCC_CargosCab cargo
-inner join @ArregloIdCargoCab arr on cargo.IdCargoCab = arr.IdCargoCab
+	INSERT INTO tCC_DescargosCab (
+	IdCliente
+	,IdTipoDocumento
+	,IdEmpresa
+	,IdPeriodoContable
+	,Establecimiento
+	,PuntoEmision
+	,Secuencial
+	,FechaEmision
+	,SubtotalIva
+	,Subtotal0
+	,SubtotalNoObjetoImpuesto
+	,TotalExcentoIva
+	,SubtotalSinImpuesto
+	,TotalDescuento
+	,Iva
+	,Ice
+	,Irbpnr
+	,ValorTotal
+	,Saldo
+	,Motivo
+	,InformacionAdicional
+	,IdEstadoDocumento
+	,IdGrupoComprobante
+	,NumeroComprobante
+	,Concepto
+	,IdTipoCobro
+	,IdCaja
+	,EnviarAlDoce
+	,IdTipoDocumentoModificado
+	,NumeroDocumentoModificado
+	,FechaEmisionDocSustento
+	,IdCobrador
+	,IdCargoCab
+	)
+	select 
+	cargo.IdCliente
+	,@IdTipoDocumento as IdTipoDocumento
+	,cargo.IdEmpresa as IdEmpresa 
+	,@IdPeriodoContable as IdPeriodoContable
+	,@Establecimiento as Establecimiento
+	,@PuntoEmision as PuntoEmision
+	,@Secuencial AS Secuencial
+	,GETDATE() as FechaEmision
+	,cargo.SubtotalIva
+	,cargo.Subtotal0
+	,cargo.SubtotalNoObjetoImpuesto
+	,cargo.TotalExcentoIva
+	,cargo.SubtotalSinImpuesto
+	,cargo.TotalDescuento
+	,cargo.Iva
+	,cargo.Ice
+	,cargo.Irbpnr
+	,cargo.ValorTotal
+	,cargo.Saldo
+	,@Motivo
+	,cargo.InformacionAdicional
+	,@IdEstadoDocumento as IdEstadoDocumento
+	,@IdGrupoComprobante as IdGrupoComprobante
+	,@NumeroComprobanteActual as NumeroComprobante
+	,@Motivo
+	,@IdTipoCobro 
+	,@IdCaja
+	,cargo.EnviarAlDoce
+	,cargo.IdTipoDocumento as IdTipoDocumentoModificado
+	,cargo.NumeroDocumento as NumeroDocumentoModificado
+	,cargo.FechaEmision as FechaEmisionDocSustento
+	,cargo.IdCobrador
+	,cargo.IdCargoCab
+	from tCC_CargosCab cargo
+	where cargo.IdCargoCab = @IdCargoCabCurrent;
+	
+	SET @IdDescargoCabInserted = CAST(IDENT_CURRENT('tCC_DescargosCab')  AS INT)-- Obtenemos el Id Ingresado en tCC_DescargosCab
 
-SET @IdDescargoCabInserted = 	CAST(IDENT_CURRENT('tCC_DescargosCab')  AS INT)-- Obtenemos el Id Ingresado en tCC_DescargosCab
-
--- insert de detalles del descargo
-INSERT INTO tCC_DescargosDet(
+	-- insert de detalles del descargo
+	INSERT INTO tCC_DescargosDet(
 IdDescargoCab
 ,CodigoPrincipal
 ,CodigoAuxiliar
@@ -320,11 +338,10 @@ inner join tCC_DescargosCab cab on det.IdCargoCab = cab.IdCargoCab
 inner join @ArregloIdCargoCab arr on cab.IdCargoCab = arr.IdCargoCab
 --inner join tGS_Cuotas_V2 cuota on det.IdCuota = cuota.IdCuota
 
-/*
-CRUCE DE DOCUMENTOS
-*/
-
-INSERT INTO tCC_TemporalCruceDoc
+	-- --------------------------------------------
+	-- Cruce de Documentos
+	-- --------------------------------------------
+	INSERT INTO tCC_TemporalCruceDoc
 (
 IdCliente,
 IdTipoDocumento,
@@ -339,17 +356,24 @@ from tCC_DescargosCab descargoCab
 where IdDescargoCab = @IdDescargoCabInserted
 and descargoCab.IdTipoDocumento <> 59--Ingreso al fideicomiso
 
--- --------------------------------------------
--- Actualización de secuenciales
--- --------------------------------------------
-UPDATE tGN_Secuenciales  
+	-- --------------------------------------------
+	-- Actualización de secuenciales
+	-- --------------------------------------------
+	UPDATE tGN_Secuenciales  
 SET    Secuencial = [dbo].[fn_LeftPAD](CONVERT(VARCHAR, @SecuencialInt + 1), 9, '0')  
 WHERE  IdPuntoEmision = @IdPuntoEmision  AND IdTipoDocumento = @IdTipoDocumento; 
 
+	-- --------------------------------------------
+	-- Se ejecuta el proceso de mayorización
+	-- PENDIENTE
+	-- --------------------------------------------
+	
+	-- ======================================================
+	-- -----------
+	SET @codigo = @codigo + 1;-- iteracion del contador     
+	END --cierre del BEGIN del WHILE          
+END -- cierre del IF (@maxContador>0)     
 
--- --------------------------------------------
--- Se ejecuta el proceso de mayorización
--- --------------------------------------------
 
 
 
