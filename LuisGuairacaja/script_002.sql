@@ -104,3 +104,13 @@ ALTER TABLE tCC_DescargosDet Add IdCuota INT
 
 GO
 
+-- Ajustes en la tabla del catalgo de Impuestos de IVA
+ALTER TABLE tGN_TiposImpuestosIva add IdTipoImpuesto int
+ALTER TABLE tGN_TiposImpuestosIva WITH CHECK ADD  CONSTRAINT [FK_tGN_TiposImpuestosIva_tGN_TiposImpuestos] FOREIGN KEY([IdTipoImpuesto])
+REFERENCES [dbo].[tGN_TiposImpuestos] ([IdTipoImpuesto])
+
+UPDATE tGN_TiposImpuestosIva set IdTipoImpuesto = 2 WHERE IdTipoImpuestoIva = 0
+UPDATE tGN_TiposImpuestosIva set IdTipoImpuesto = 1 WHERE IdTipoImpuestoIva = 1
+UPDATE tGN_TiposImpuestosIva set IdTipoImpuesto = 4 WHERE IdTipoImpuestoIva = 4
+UPDATE tGN_TiposImpuestosIva set IdTipoImpuesto = 5 WHERE IdTipoImpuestoIva = 5
+
