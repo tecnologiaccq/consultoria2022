@@ -81,14 +81,14 @@ CREATE TABLE [dbo].[tGS_Cuotas_V2](
 	ValorTotal DECIMAL(18,2) not NULL check(ValorTotal>=0),
 	IdMesEmisionBimestral  TINYINT NOT NULL, --[1] MesImpar, [2]  MesPar, para cuotas ordinarias
 	[Descripcion] [nvarchar](128) NOT NULL,
-	[CreadoPor] [nvarchar](32) NOT NULL,
-	[FechaCreacion] [datetime] NOT NULL,
-	[EstacionCreacion] [nvarchar](24) NOT NULL,
-	[ModificadoPor] [nvarchar](32) NOT NULL,
-	[UltimaModificacion] [datetime] NOT NULL,
-	[EstacionModificacion] [nvarchar](24) NOT NULL,
+	[CreadoPor] [nvarchar](32)  NULL,
+	[FechaCreacion] [datetime] NULL,
+	[EstacionCreacion] [nvarchar](24) NULL,
+	[ModificadoPor] [nvarchar](32) NULL,
+	[UltimaModificacion] [datetime] NULL,
+	[EstacionModificacion] [nvarchar](24) NULL,
 
-	CHECK (ValorIVA = (ValorCuota - ValorDescuento) * ValorPorcentajeIva),
+	CHECK (ValorIVA = ROUND((ValorCuota - ValorDescuento) * ValorPorcentajeIva,2)),
 	CHECK (ValorTotal = ValorIVA  +  ValorCuota - ValorDescuento)
  )
 
